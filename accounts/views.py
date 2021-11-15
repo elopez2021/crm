@@ -9,6 +9,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 #this is gonna restrict the user from seeing some page if he isn't logged in, and you set the decorator above the view
 
+from django.contrib.auth.models import Group
+
 from django.contrib.auth.forms import UserCreationForm
 
 from django.contrib.auth import authenticate, login, logout
@@ -19,7 +21,7 @@ from .forms import OrderForm, CreateUserForm
 #import the form you gonna use here
 from .filters import OrderFilter
 
-from .decorators import unauthenticated_user, allowed_users
+from .decorators import unauthenticated_user, allowed_users, admin_only
 
 @unauthenticated_user
 def registerPage(request):
@@ -27,9 +29,16 @@ def registerPage(request):
     if request.method == 'POST':
         form = CreateUserForm(request.POST)
         if form.is_valid():
-            form.save()
-            user = form.cleaned_data.get('username')
-            messages.success(request, "Account was created for " + user)
+            user = form.save()
+            username = form.cleaned_data.get('username')
+            group = Group.objects.get(name='customer')
+            user.groups.add(group)
+            #this is gonna associate the user with its group, which is customer
+            Customer.objects.create(
+                user=user, #when an user is created, also the customer is gonna be created
+            )
+            
+            messages.success(request, "Account was created for " + username)
             #this shows a message when you're succesfully logged in, and it shows up in the login page
             return redirect('login')
 
@@ -58,18 +67,26 @@ def logoutUser(request):
     logout(request)
     return redirect('login')
 
-
+@login_required(login_url='login')
+@allowed_users(allowed_roles=['customer'])#this home page is going to be allowed only for admin users
 def userPage(request):
-    context = {}
+    orders = request.user.customer.order_set.all()#grab all the orders from the customer
+
+    total_orders = orders.count()
+    delivered = orders.filter(status='Delivered').count()
+    pending = orders.filter(status='Pending').count()
+    
+    context = {'orders':orders, 'total_orders':total_orders, 'delivered':delivered, 'pending':pending}
     return render(request, 'accounts/user.html', context)
 
 @login_required(login_url='login')
-@allowed_users(allowed_roles=['admin'])#this home page is going to be allowed only for admin users
+@admin_only #it's gonna check if it is a customer or a admin
 def home(request):
     orders = Order.objects.all()
     customers = Customer.objects.all()
 
     total_customers = customers.count()
+
     total_orders = orders.count()
     delivered = orders.filter(status='Delivered').count()
     pending = orders.filter(status='Pending').count()
@@ -82,12 +99,14 @@ def home(request):
     #and then we put it after the request
 
 @login_required(login_url='login')
+@allowed_users(allowed_roles=['admin'])#this home page is going to be allowed only for admin users
 def products(request):
     products = Product.objects.all()
     return render(request, 'accounts/products.html', {'products': products})
     #whatever we call in "" is gonna be used in the templates
 
 @login_required(login_url='login')
+@allowed_users(allowed_roles=['admin'])#this home page is going to be allowed only for admin users
 def customer(request, pk):
     customer = Customer.objects.get(id=pk)
 
@@ -101,6 +120,7 @@ def customer(request, pk):
     return render(request, 'accounts/customer.html', context)
 
 @login_required(login_url='login')
+@allowed_users(allowed_roles=['admin'])#this home page is going to be allowed only for admin users
 def createOrder(request, pk):
 	OrderFormSet = inlineformset_factory(Customer, Order, fields=('product', 'status'), extra=10 )
     #extra is the fields that are going to be added
@@ -119,6 +139,7 @@ def createOrder(request, pk):
 	return render(request, 'accounts/order_form.html', context)
 
 @login_required(login_url='login')
+@allowed_users(allowed_roles=['admin'])#this home page is going to be allowed only for admin users
 def updateOrder(request, pk):
     order = Order.objects.get(id=pk)
     form = OrderForm(instance=order)
@@ -136,6 +157,7 @@ def updateOrder(request, pk):
     return render(request, 'accounts/order_form.html', context)
 
 @login_required(login_url='login')
+@allowed_users(allowed_roles=['admin'])#this home page is going to be allowed only for admin users
 def deleteOrder(request, pk):
     order = Order.objects.get(id=pk)
     if request.method == 'POST':
