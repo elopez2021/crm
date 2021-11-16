@@ -31,12 +31,8 @@ def registerPage(request):
         if form.is_valid():
             user = form.save()
             username = form.cleaned_data.get('username')
-            group = Group.objects.get(name='customer')
-            user.groups.add(group)
-            #this is gonna associate the user with its group, which is customer
-            Customer.objects.create(
-                user=user, #when an user is created, also the customer is gonna be created
-            )
+           
+            
             
             messages.success(request, "Account was created for " + username)
             #this shows a message when you're succesfully logged in, and it shows up in the login page
